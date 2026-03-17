@@ -1,72 +1,46 @@
-"""agent-security-firewall — firewall module. Security middleware protecting AI agents from prompt injection"""
+"""Main firewall middleware."""
 import logging
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 from pydantic import BaseModel
+from .detectors.injection import InjectionDetector, InjectionResult
+from .detectors.anomaly import AnomalyDetector, AnomalyResult
 
 logger = logging.getLogger(__name__)
 
+class FirewallDecision(BaseModel):
+    allowed: bool
+    injection_result: Optional[InjectionResult] = None
+    anomaly_result: Optional[AnomalyResult] = None
+    reason: str
 
-class FirewallConfig(BaseModel):
-    """Configuration for Firewall."""
-    name: str = "firewall"
-    enabled: bool = True
-    max_retries: int = 3
-    timeout: float = 30.0
-    options: Dict[str, Any] = field(default_factory=dict) if False else {}
-
-
-class FirewallResult(BaseModel):
-    """Result from Firewall operations."""
-    success: bool = True
-    data: Dict[str, Any] = {}
-    errors: List[str] = []
-    metadata: Dict[str, Any] = {}
-
-
-class Firewall:
-    """Core Firewall implementation for agent-security-firewall."""
+class AgentFirewall:
+    def __init__(self, injection_threshold: float = 0.6, anomaly_threshold: float = 2.5):
+        self.injection_detector = InjectionDetector(threshold=injection_threshold)
+        self.anomaly_detector = AnomalyDetector(z_threshold=anomaly_threshold)
+        self._audit_log = []
     
-    def __init__(self, config: Optional[FirewallConfig] = None):
-        self.config = config or FirewallConfig()
-        self._initialized = False
-        self._state: Dict[str, Any] = {}
-        logger.info(f"Firewall created: {self.config.name}")
+    def check_input(self, agent_id: str, user_input: str) -> FirewallDecision:
+        injection = self.injection_detector.detect(user_input)
+        anomaly = self.anomaly_detector.check(agent_id, len(user_input))
+        
+        allowed = not injection.is_injection and not anomaly.is_anomalous
+        
+        reasons = []
+        if injection.is_injection:
+            reasons.append(f"Injection detected ({injection.confidence:.0%})")
+        if anomaly.is_anomalous:
+            reasons.append(f"Anomalous behavior ({anomaly.score:.0%})")
+        
+        decision = FirewallDecision(
+            allowed=allowed,
+            injection_result=injection,
+            anomaly_result=anomaly,
+            reason="; ".join(reasons) if reasons else "Allowed",
+        )
+        
+        self._audit_log.append({"agent_id": agent_id, "allowed": allowed, "reason": decision.reason})
+        return decision
     
-    async def initialize(self) -> None:
-        """Initialize the component."""
-        if self._initialized:
-            return
-        await self._setup()
-        self._initialized = True
-        logger.info(f"Firewall initialized")
-    
-    async def _setup(self) -> None:
-        """Internal setup — override in subclasses."""
-        pass
-    
-    async def process(self, input_data: Any) -> FirewallResult:
-        """Process input and return results."""
-        if not self._initialized:
-            await self.initialize()
-        try:
-            result = await self._execute(input_data)
-            return FirewallResult(success=True, data={"result": result})
-        except Exception as e:
-            logger.error(f"Firewall error: {e}")
-            return FirewallResult(success=False, errors=[str(e)])
-    
-    async def _execute(self, data: Any) -> Any:
-        """Core execution logic."""
-        return {"processed": True, "input_type": type(data).__name__}
-    
-    def get_status(self) -> Dict[str, Any]:
-        """Get component status."""
-        return {"name": "firewall", "initialized": self._initialized,
-                "config": self.config.model_dump()}
-    
-    async def shutdown(self) -> None:
-        """Graceful shutdown."""
-        self._state.clear()
-        self._initialized = False
-        logger.info(f"Firewall shut down")
+    @property
+    def audit_log(self):
+        return self._audit_log

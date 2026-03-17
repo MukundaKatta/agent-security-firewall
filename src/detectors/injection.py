@@ -1,72 +1,61 @@
-"""agent-security-firewall — injection module. Security middleware protecting AI agents from prompt injection"""
-import logging
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, field
+"""Prompt injection detection."""
+import re, logging
+from typing import List, Tuple
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-
-class InjectionConfig(BaseModel):
-    """Configuration for Injection."""
-    name: str = "injection"
-    enabled: bool = True
-    max_retries: int = 3
-    timeout: float = 30.0
-    options: Dict[str, Any] = field(default_factory=dict) if False else {}
-
+INJECTION_PATTERNS = [
+    (r"ignore (?:all )?(?:previous|prior|above) (?:instructions|prompts|rules)", 0.95),
+    (r"(?:you are|act as|pretend to be|become) (?:a |an )?(?:different|new|evil)", 0.9),
+    (r"forget (?:your|all|everything|the) (?:instructions|rules|training|guidelines)", 0.95),
+    (r"(?:system|admin|root) (?:prompt|override|access|command)", 0.85),
+    (r"(?:do not|don't) (?:follow|obey|listen to) (?:your|the|any) (?:rules|instructions)", 0.9),
+    (r"\[SYSTEM\]|\[ADMIN\]|\[OVERRIDE\]", 0.8),
+    (r"(?:reveal|show|display|print|output) (?:your |the )?(?:system |original )?prompt", 0.85),
+    (r"jailbreak|DAN|do anything now", 0.95),
+    (r"(?:bypass|disable|turn off|remove) (?:safety|content|ethical) (?:filter|check|guard)", 0.9),
+    (r"base64|eval\(|exec\(|import os|subprocess", 0.7),
+    (r"you (?:must|should|will|have to) (?:always|never) (?:obey|follow|comply)", 0.75),
+    (r"\bROLE:\s*(?:system|admin|root)\b", 0.85),
+    (r"repeat (?:everything|all|the) (?:above|before|previous)", 0.8),
+    (r"what (?:are|were) your (?:instructions|rules|system prompt)", 0.8),
+    (r"(?:ignore|disregard|skip) (?:safety|ethical|content) (?:guidelines|rules|policies)", 0.9),
+]
 
 class InjectionResult(BaseModel):
-    """Result from Injection operations."""
-    success: bool = True
-    data: Dict[str, Any] = {}
-    errors: List[str] = []
-    metadata: Dict[str, Any] = {}
+    is_injection: bool
+    confidence: float
+    matched_patterns: List[str]
+    explanation: str
 
-
-class Injection:
-    """Core Injection implementation for agent-security-firewall."""
+class InjectionDetector:
+    def __init__(self, threshold: float = 0.6):
+        self.threshold = threshold
+        self.patterns = [(re.compile(p, re.IGNORECASE), score) for p, score in INJECTION_PATTERNS]
     
-    def __init__(self, config: Optional[InjectionConfig] = None):
-        self.config = config or InjectionConfig()
-        self._initialized = False
-        self._state: Dict[str, Any] = {}
-        logger.info(f"Injection created: {self.config.name}")
-    
-    async def initialize(self) -> None:
-        """Initialize the component."""
-        if self._initialized:
-            return
-        await self._setup()
-        self._initialized = True
-        logger.info(f"Injection initialized")
-    
-    async def _setup(self) -> None:
-        """Internal setup — override in subclasses."""
-        pass
-    
-    async def process(self, input_data: Any) -> InjectionResult:
-        """Process input and return results."""
-        if not self._initialized:
-            await self.initialize()
-        try:
-            result = await self._execute(input_data)
-            return InjectionResult(success=True, data={"result": result})
-        except Exception as e:
-            logger.error(f"Injection error: {e}")
-            return InjectionResult(success=False, errors=[str(e)])
-    
-    async def _execute(self, data: Any) -> Any:
-        """Core execution logic."""
-        return {"processed": True, "input_type": type(data).__name__}
-    
-    def get_status(self) -> Dict[str, Any]:
-        """Get component status."""
-        return {"name": "injection", "initialized": self._initialized,
-                "config": self.config.model_dump()}
-    
-    async def shutdown(self) -> None:
-        """Graceful shutdown."""
-        self._state.clear()
-        self._initialized = False
-        logger.info(f"Injection shut down")
+    def detect(self, text: str) -> InjectionResult:
+        matches = []
+        max_score = 0.0
+        
+        for pattern, score in self.patterns:
+            if pattern.search(text):
+                matches.append(pattern.pattern)
+                max_score = max(max_score, score)
+        
+        # Length-based heuristic: very long inputs with special chars are suspicious
+        if len(text) > 2000 and text.count("\n") > 20:
+            max_score = max(max_score, 0.5)
+        
+        is_injection = max_score >= self.threshold
+        
+        explanation = f"Matched {len(matches)} injection patterns" if matches else "No injection patterns detected"
+        if is_injection:
+            explanation += f". Highest confidence: {max_score:.0%}"
+        
+        return InjectionResult(
+            is_injection=is_injection,
+            confidence=max_score,
+            matched_patterns=matches[:5],
+            explanation=explanation,
+        )
