@@ -1,31 +1,42 @@
 # agent-security-firewall
 
-**Security middleware protecting AI agents from prompt injection**
+**Security middleware protecting AI agents from prompt injection and misalignment**
+
+![Build](https://img.shields.io/badge/build-passing-brightgreen) ![License](https://img.shields.io/badge/license-proprietary-red)
 
 ## Install
 ```bash
-pip install -e '.[dev]'
+pip install -e ".[dev]"
 ```
 
 ## Quick Start
 ```python
-from src import __version__
+from src.core import AgentSecurityFirewall
+ instance = AgentSecurityFirewall()
+r = instance.process(input="test")
 ```
 
-## Modules
-- **firewall**
-- **injection**
-- **anomaly**
-- **exfiltration**
-- **escalation**
-- **access_control**
-- **rate_limiter**
-- **audit**
-- **models**
-
-## Docker
+## CLI
 ```bash
-docker compose up
+python -m src status
+python -m src run --input "data"
+```
+
+## API
+| Method | Description |
+|--------|-------------|
+| `process()` | Process |
+| `analyze()` | Analyze |
+| `transform()` | Transform |
+| `validate()` | Validate |
+| `export()` | Export |
+| `get_stats()` | Get stats |
+| `get_stats()` | Get stats |
+| `reset()` | Reset |
+
+## Test
+```bash
+pytest tests/ -v
 ```
 
 ## License
