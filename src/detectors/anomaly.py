@@ -41,25 +41,29 @@ class BehaviorBaseline:
         return max(math.sqrt(variance), 1.0)
 
 class AnomalyDetector:
-    def __init__(self, z_threshold: float = 2.5):
+    def __init__(self, z_threshold: float = 2.5, min_samples: int = 50):
         self.z_threshold = z_threshold
+        # Require enough history before any data point can be flagged.
+        # 10 samples was too noisy: a single 10% variation past identical
+        # samples produces a huge z because std collapses to 1.0 (the floor).
+        self.min_samples = min_samples
         self._baselines: Dict[str, BehaviorBaseline] = {}
-    
+
     def get_baseline(self, agent_id: str) -> BehaviorBaseline:
         if agent_id not in self._baselines:
             self._baselines[agent_id] = BehaviorBaseline()
         return self._baselines[agent_id]
-    
+
     def check(self, agent_id: str, response_length: int, actions: List[str] = None, tools: List[str] = None) -> AnomalyResult:
         baseline = self.get_baseline(agent_id)
         deviations = {}
-        
-        if len(baseline._response_lengths) >= 10:
+
+        if len(baseline._response_lengths) >= self.min_samples:
             z_score = abs(response_length - baseline.mean_length) / baseline.std_length
             deviations["response_length_z"] = round(z_score, 2)
-        
+
         baseline.record(response_length, actions, tools)
-        
+
         max_dev = max(deviations.values()) if deviations else 0.0
         is_anomalous = max_dev > self.z_threshold
         

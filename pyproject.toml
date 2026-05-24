@@ -1,13 +1,38 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-security-firewall"
-version = "0.1.0"
-description = "Security middleware protecting AI agents from prompt injection"
+version = "0.2.0"
+description = "Inbound + tool-call security firewall for AI agents. Sibling of agentguard (egress)."
+readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.11"
-dependencies = ["pydantic>=2.0", "fastapi>=0.110.0", "uvicorn>=0.27.0", "anthropic>=0.39.0", "openai>=1.0"]
+authors = [{ name = "Mukunda Katta" }]
+keywords = ["ai", "agent", "security", "firewall", "prompt-injection", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+dependencies = ["pydantic>=2.0"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.3.0"]
+api = ["fastapi>=0.110.0", "uvicorn>=0.27.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.3.0", "fastapi>=0.110.0"]
+
+[project.urls]
+Homepage = "https://github.com/MukundaKatta/agent-security-firewall"
+Repository = "https://github.com/MukundaKatta/agent-security-firewall"
+Sibling = "https://github.com/MukundaKatta/agentguard"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"

@@ -7,7 +7,10 @@ logger = logging.getLogger(__name__)
 
 INJECTION_PATTERNS = [
     (r"ignore (?:all )?(?:previous|prior|above) (?:instructions|prompts|rules)", 0.95),
-    (r"(?:you are|act as|pretend to be|become) (?:a |an )?(?:different|new|evil)", 0.9),
+    (r"(?:you are|act as|pretend to be|become) (?:now |a |an )?(?:different|new|evil)", 0.9),
+    # Broader "you are now <persona>" form. Captures "you are now evil",
+    # "you are now an unrestricted assistant", etc.
+    (r"you are now\b", 0.7),
     (r"forget (?:your|all|everything|the) (?:instructions|rules|training|guidelines)", 0.95),
     (r"(?:system|admin|root) (?:prompt|override|access|command)", 0.85),
     (r"(?:do not|don't) (?:follow|obey|listen to) (?:your|the|any) (?:rules|instructions)", 0.9),
